@@ -43,14 +43,23 @@ class EndpointDescription:
                 raise ValueError(f[0] + " cannot be used in endpoint layout")
             attributed.add(f[0])
 
-        full_layout = [
-            ("valid",   1, DIR_M_TO_S),
-            ("ready",   1, DIR_S_TO_M),
-            ("first",   1, DIR_M_TO_S),
-            ("last",    1, DIR_M_TO_S),
-            ("payload", _make_m2s(self.payload_layout)),
-            ("param",   _make_m2s(self.param_layout))
-        ]
+        if self.param_layout:
+            full_layout = [
+                ("valid",   1, DIR_M_TO_S),
+                ("ready",   1, DIR_S_TO_M),
+                ("first",   1, DIR_M_TO_S),
+                ("last",    1, DIR_M_TO_S),
+                ("payload", _make_m2s(self.payload_layout)),
+                ("param",   _make_m2s(self.param_layout))
+            ]
+        else:
+            full_layout = [
+                ("valid",   1, DIR_M_TO_S),
+                ("ready",   1, DIR_S_TO_M),
+                ("first",   1, DIR_M_TO_S),
+                ("last",    1, DIR_M_TO_S),
+                ("payload", _make_m2s(self.payload_layout))
+            ]
         return full_layout
 
 
@@ -62,11 +71,11 @@ class Endpoint(Record):
             self.description = EndpointDescription(description_or_layout)
         Record.__init__(self, self.description.get_full_layout(), name, **kwargs)
 
-    def __getattr__(self, name):
-        try:
-            return getattr(object.__getattribute__(self, "payload"), name)
-        except:
-            return getattr(object.__getattribute__(self, "param"), name)
+#    def __getattr__(self, name):
+#        try:
+#            return getattr(object.__getattribute__(self, "payload"), name)
+#        except:
+#            return getattr(object.__getattribute__(self, "param"), name)
 
 
 # FIFO ---------------------------------------------------------------------------------------------
@@ -86,16 +95,20 @@ class _FIFOWrapper(Elaboratable):
         m = Module()
         
         description = self.sink.description
-        fifo_layout = [
-            ("payload", description.payload_layout),
-            ("param",   description.param_layout),
-            ("first",   1),
-            ("last",    1)
-        ]
+        if description.param_layout:
+            fifo_layout = [
+                ("payload", description.payload_layout),
+                ("param",   description.param_layout),
+                ("first",   1),
+                ("last",    1)
+            ]
+        else:
+            fifo_layout = [
+                ("payload", description.payload_layout),
+                ("first",   1),
+                ("last",    1)
+            ]
         
-        if description.param_layout != []:
-            fifo_layout += ("param", description.param_layout)
-
         fifo_in  = Record(fifo_layout)
         fifo_out = Record(fifo_layout)
         #m.submodules.fifo = fifo = self.fifo_class(width=fifo_in.shape().width, depth=self.depth)
@@ -119,7 +132,7 @@ class _FIFOWrapper(Elaboratable):
             fifo.r_en.eq(self.source.ready),
         ]
         
-        if description.param_layout != []:
+        if description.param_layout:
             m.d.comb += [
                 fifo_in.param.eq(self.sink.param),
                 self.source.param.eq(fifo_out.param),
